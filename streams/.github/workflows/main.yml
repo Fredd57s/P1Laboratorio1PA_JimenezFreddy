@@ -1,0 +1,65 @@
+name: CI/CD Pipeline Spring Boot Tareas
+
+# Triggers
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  # Integración Continua (CI)
+  build-and-test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Descargar el código del repositorio
+        uses: actions/checkout@v3
+
+      - name: Configurar Java 17
+        uses: actions/setup-java@v3
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+          cache: maven
+
+      - name: Dar permisos de ejecución a Maven (Opcional pero recomendado)
+        run: chmod +x mvnw
+
+      # Build, Test y Package
+      - name: Compilar, ejecutar pruebas y empaquetar (mvn clean install)
+        run: ./mvnw clean install -Dspring.profiles.active=dev
+
+      # Se guarda el .jar generado temporalmente para usarlo en el siguiente Job
+      - name: Subir artefacto (.jar)
+        uses: actions/upload-artifact@v3
+        with:
+          name: spring-boot-jar
+          path: target/*.jar
+
+  # Despliegue (CD)
+  deploy-docker:
+    needs: build-and-test
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Descargar el código del repositorio
+        uses: actions/checkout@v3
+
+      - name: Descargar el artefacto (.jar) de la etapa de CI
+        uses: actions/download-artifact@v3
+        with:
+          name: spring-boot-jar
+          path: target/
+
+      # Despliegue Mínimo Viable
+      - name: Construir imagen Docker
+        run: docker build -t api-tareas-app:latest .
+
+      - name: Simular Despliegue (Ejecutar contenedor local en el runner)
+        run: |
+          docker run -d -p 8080:8080 --name mi-api-tareas api-tareas-app:latest
+          sleep 10 # Esperamos 10 segundos a que Spring Boot inicie
+          docker ps # Verificamos que el contenedor está corriendo
